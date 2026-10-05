@@ -11,6 +11,10 @@
     "type": "git",
     "url": "git+https://github.com/abdelrhmannienaa/ReadingApp.git"
   },
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
