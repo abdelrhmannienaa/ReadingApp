@@ -37,7 +37,17 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/abdelrhmannienaa/ReadingApp/issues"
   },
   "private": true
 }
