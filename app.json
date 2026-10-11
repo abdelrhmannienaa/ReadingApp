@@ -8,7 +8,8 @@
     "scheme": "tempapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.anonymous.temp-app"
     },
     "android": {
       "adaptiveIcon": {
