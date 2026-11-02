@@ -17,19 +17,15 @@ import {
 } from "../../api";
 
 export default function BookDetailsScreen() {
-  // Reads the ID sent from Explore, such as "OL45804W".
   const { workId } = useLocalSearchParams<{ workId: string }>();
 
-  // State for loading and displaying the selected book.
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Separate state for the Add to Library action.
   const [addingToLibrary, setAddingToLibrary] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState("");
 
-  // Load this book's details when this page opens.
   useEffect(() => {
     async function loadBookDetails() {
       setLoading(true);
@@ -48,7 +44,6 @@ export default function BookDetailsScreen() {
     loadBookDetails();
   }, [workId]);
 
-  // Runs only when the user taps Add to Library.
   async function handleAddToLibrary() {
     if (!book) {
       return;
