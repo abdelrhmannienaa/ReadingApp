@@ -59,7 +59,53 @@ app.get("/api/books/search", async (req, res) => {
     });
   }
 });
+app.get("/api/books/details/:workId", async (req, res) => {
+  const { workId } = req.params;
 
+  try {
+    const response = await fetch(
+      `https://openlibrary.org/works/${workId}.json`,
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch data from Open Library API");
+    }
+    const work = await response.json();
+    let author = "Unknown Author";
+    const authorKey = work.authors?.[0]?.author?.key;
+
+    if (authorKey) {
+      const authorResponse = await fetch(
+        `https://openlibrary.org${authorKey}.json`,
+      );
+
+      if (authorResponse.ok) {
+        const authorData = await authorResponse.json();
+        author = authorData.name || author;
+      }
+    }
+    const rawDescription =
+      typeof work.description === "string"
+        ? work.description
+        : work.description?.value ||
+          "No description is available for this book.";
+
+    const description = rawDescription.split(/\n\s*-{3,}\s*\n/)[0].trim();
+    res.json({
+      open_library_id: `/works/${workId}`,
+      title: work.title || "Untitled",
+      cover_url: work.covers?.[0]
+        ? `https://covers.openlibrary.org/b/id/${work.covers[0]}-L.jpg`
+        : null,
+      author,
+      description,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "An error occurred while fetching data from the Open Library API",
+      details: error.message,
+    });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
 });
