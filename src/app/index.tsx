@@ -8,20 +8,22 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { fetchBooks, type Book } from "../api";
+import { fetchMyLibrary, type LibraryBook } from "../api";
 
 export default function HomeScreen() {
-  const [books, setBooks] = useState<Book[]>([]);
+  // Each item contains user-specific data plus its connected book.
+  const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadBooks() {
       try {
-        const data = await fetchBooks();
+        // Loads books belonging only to the signed-in user.
+        const data = await fetchMyLibrary();
         setBooks(data);
-      } catch (error) {
-        setError("Could not load books. Make sure the backend is running.");
+      } catch {
+        setError("Could not load your library. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -52,24 +54,41 @@ export default function HomeScreen() {
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         {!loading && !error && books.length === 0 ? (
-          <Text style={styles.emptyText}>No books have been added yet.</Text>
+          <Text style={styles.emptyText}>
+            Your library is empty. Search for a book to add one.
+          </Text>
         ) : null}
 
-        {books.map((book) => (
-          <View key={book.id} style={styles.bookCard}>
-            <View style={styles.coverPlaceholder}>
-              <Text style={styles.coverText}>
-                {book.title.slice(0, 2).toUpperCase()}
-              </Text>
-            </View>
+        {books.map((libraryBook) => {
+          // `book` contains shared title/author/cover information.
+          // `libraryBook` contains this user's status and progress.
+          const book = libraryBook.book;
 
-            <View style={styles.bookDetails}>
-              <Text style={styles.bookTitle}>{book.title}</Text>
-              <Text style={styles.author}>{book.author}</Text>
-              <Text style={styles.pageCount}>{book.page_count} pages</Text>
+          return (
+            <View key={libraryBook.user_book_id} style={styles.bookCard}>
+              <View style={styles.coverPlaceholder}>
+                <Text style={styles.coverText}>
+                  {book.title.slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={styles.bookDetails}>
+                <Text style={styles.bookTitle}>{book.title}</Text>
+                <Text style={styles.author}>{book.author}</Text>
+
+                <Text style={styles.pageCount}>
+                  {book.page_count !== null
+                    ? `${book.page_count} pages`
+                    : "Page count unavailable"}
+                </Text>
+
+                <Text style={styles.pageCount}>
+                  Status: {libraryBook.status.replaceAll("_", " ")}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -150,6 +169,7 @@ const styles = StyleSheet.create({
   pageCount: {
     color: "#D4D4D8",
     fontSize: 13,
+    marginBottom: 3,
   },
   emptyText: {
     color: "#A1A1AA",
