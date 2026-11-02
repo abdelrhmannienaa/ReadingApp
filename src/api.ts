@@ -1,3 +1,4 @@
+import { daysAgoKey, toDateKey } from "@/lib/reading-stats";
 import { supabase } from "@/lib/supabase";
 import { Platform } from "react-native";
 export type Book = {
@@ -106,5 +107,166 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
     if (userBookError) {
       throw new Error(userBookError.message);
     }
+  }
+}
+
+// The dashboard needs a year of sessions so a long streak is counted correctly,
+// even though the habit grid only shows the last 16 weeks.
+const SESSION_HISTORY_DAYS = 366;
+
+export type CurrentRead = {
+  book_id: string;
+  title: string;
+  author: string;
+  cover_url: string | null;
+  // Null when we don't know the book's length, so check before showing "x/y".
+  page_count: number | null;
+  current_page: number;
+  status: string;
+};
+
+export type ReadingSession = {
+  book_id: string;
+  minutes: number;
+  read_on: string;
+  created_at: string;
+};
+
+export type DashboardData = {
+  displayName: string;
+  books: CurrentRead[];
+  sessions: ReadingSession[];
+};
+
+type UserBookRow = {
+  book_id: string;
+  status: string;
+  current_page: number | null;
+  books: {
+    title: string;
+    author: string;
+    cover_url: string | null;
+    page_count: number | null;
+  };
+};
+
+async function getSignedInUser() {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new Error("You must be signed in.");
+  }
+  return user;
+}
+
+export async function fetchDashboard(): Promise<DashboardData> {
+  const user = await getSignedInUser();
+
+  const { data: userBooks, error: userBooksError } = await supabase
+    .from("user_books")
+    .select(
+      "book_id, status, current_page, books(title, author, cover_url, page_count)",
+    )
+    .eq("user_id", user.id)
+    .in("status", ["reading", "want_to_read"]);
+
+  if (userBooksError) {
+    throw new Error(userBooksError.message);
+  }
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("reading_sessions")
+    .select("book_id, minutes, read_on, created_at")
+    .eq("user_id", user.id)
+    .gte("read_on", daysAgoKey(new Date(), SESSION_HISTORY_DAYS))
+    .order("created_at", { ascending: false });
+
+  if (sessionsError) {
+    throw new Error(sessionsError.message);
+  }
+
+  // Sessions are newest first, so the first one seen for a book is its latest.
+  const lastReadAt = new Map<string, string>();
+  for (const session of sessions) {
+    if (!lastReadAt.has(session.book_id)) {
+      lastReadAt.set(session.book_id, session.created_at);
+    }
+  }
+
+  // supabase-js can't tell that each user_books row has exactly one book
+  // without generated database types, so we describe the row shape ourselves.
+  const rows = (userBooks ?? []) as unknown as UserBookRow[];
+
+  const books = rows.map((row) => ({
+    book_id: row.book_id,
+    status: row.status,
+    current_page: row.current_page ?? 0,
+    ...row.books,
+  }));
+
+  // Books being read come before unstarted ones, most recently read first.
+  books.sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === "reading" ? -1 : 1;
+    }
+    const aLast = lastReadAt.get(a.book_id) ?? "";
+    const bLast = lastReadAt.get(b.book_id) ?? "";
+    return bLast.localeCompare(aLast);
+  });
+
+  return {
+    displayName:
+      user.user_metadata?.display_name ?? user.email?.split("@")[0] ?? "reader",
+    books,
+    sessions,
+  };
+}
+
+export async function logReadingSession(input: {
+  book: CurrentRead;
+  minutes: number;
+  page: number;
+}): Promise<void> {
+  const { book, minutes, page } = input;
+  const user = await getSignedInUser();
+
+  const isFinished = book.page_count !== null && page >= book.page_count;
+
+  // Update the book first. Saving the same page twice is harmless, so if the
+  // session insert below fails, trying again won't double count anything.
+  const { data: updatedBooks, error: updateError } = await supabase
+    .from("user_books")
+    .update({
+      current_page: page,
+      status: isFinished ? "finished" : "reading",
+    })
+    .eq("user_id", user.id)
+    .eq("book_id", book.book_id)
+    .select("book_id");
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  // Row Level Security blocks an update by matching zero rows, not with an error.
+  if (!updatedBooks?.length) {
+    throw new Error("Could not update your progress on this book.");
+  }
+
+  const { error: insertError } = await supabase
+    .from("reading_sessions")
+    .insert({
+      user_id: user.id,
+      book_id: book.book_id,
+      minutes,
+      page_reached: page,
+      read_on: toDateKey(new Date()),
+    });
+
+  if (insertError) {
+    throw new Error(insertError.message);
   }
 }
