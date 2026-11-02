@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -10,13 +11,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { type SearchBook, searchBooks } from "../api";
+import { type SearchBook, searchBooks } from "../../api";
 
 export default function ExploreScreen() {
   const [query, setQuery] = useState("");
   const [books, setBooks] = useState<SearchBook[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   async function handleSearch() {
     const trimmedQuery = query.trim();
@@ -36,7 +38,14 @@ export default function ExploreScreen() {
       setLoading(false);
     }
   }
+  function openBookDetails(book: SearchBook) {
+    const workId = book.open_library_id.replace("/works/", "");
 
+    router.push({
+      pathname: "/explore/[workId]",
+      params: { workId },
+    });
+  }
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
@@ -66,7 +75,11 @@ export default function ExploreScreen() {
         {!loading && (
           <View>
             {books.map((book) => (
-              <View key={book.open_library_id} style={styles.bookCard}>
+              <Pressable
+                key={book.open_library_id}
+                style={styles.bookCard}
+                onPress={() => openBookDetails(book)}
+              >
                 {book.cover_url ? (
                   <Image
                     source={{ uri: book.cover_url }}
@@ -77,7 +90,7 @@ export default function ExploreScreen() {
                   <Text style={styles.baseText}>{book.title}</Text>
                   <Text style={styles.baseText}>by {book.author}</Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
