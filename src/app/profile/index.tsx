@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -11,10 +12,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import LibraryTab from "./components/library-tab";
 import StatisticsTab from "./components/statistics-tab";
 //import DiscussionsTab from "../components/profile/discussions-tab";
+import { supabase } from "@/lib/supabase";
 import RecentTab from "./components/recent-tab";
-
 const TABS = ["Recent", "Library", "Statistics", "Discussions"] as const;
 type Tab = (typeof TABS)[number];
+async function handleSignOut() {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    Alert.alert("Could not log out", error.message);
+  }
+}
 
 export default function ProfileScreen() {
   const [selectedTab, setSelectedTab] = useState<Tab>("Recent");
@@ -23,10 +31,10 @@ export default function ProfileScreen() {
     switch (selectedTab) {
       case "Recent":
         return <RecentTab />;
-       case "Library":
-         return <LibraryTab />;
-       case "Statistics":
-         return <StatisticsTab />;
+      case "Library":
+        return <LibraryTab />;
+      case "Statistics":
+        return <StatisticsTab />;
       // case "Discussions":
       //   return <DiscussionsTab />;
     }
@@ -63,6 +71,9 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
+          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </Pressable>
           {/* Tab buttons */}
           <View style={styles.rowContainer}>
             {TABS.map((tab) => (
@@ -212,5 +223,19 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: 16,
     alignSelf: "stretch",
+  },
+  logoutButton: {
+    backgroundColor: "#A78BFA",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 28,
+  },
+
+  logoutButtonText: {
+    color: "#121212",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

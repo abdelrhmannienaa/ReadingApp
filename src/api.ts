@@ -1,13 +1,17 @@
 import { supabase } from "@/lib/supabase";
 import { Platform } from "react-native";
+
+// A book saved in the shared books table.
 export type Book = {
   id: string;
   title: string;
   author: string;
-  page_count: number;
+  page_count: number | null;
   cover_url: string | null;
   created_at: string;
 };
+
+// A lightweight book result returned by Open Library search.
 export type SearchBook = {
   open_library_id: string;
   title: string;
@@ -15,6 +19,8 @@ export type SearchBook = {
   page_count: number | null;
   cover_url: string | null;
 };
+
+// Full details returned by the backend for one Open Library work.
 export type BookDetails = {
   open_library_id: string;
   title: string;
@@ -23,38 +29,65 @@ export type BookDetails = {
   description: string;
 };
 
+// A book in one particular user's library.
+// It includes user-specific fields like reading status and progress.
+export type LibraryBook = {
+  user_book_id: string;
+  status: string;
+  current_page: number;
+  book: {
+    id: string;
+    title: string;
+    author: string;
+    page_count: number | null;
+    cover_url: string | null;
+    open_library_id: string;
+  };
+};
+
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
+// Gets every shared book from the Express backend.
+// Do not use this for a person's personal Profile/Library screen.
 export async function fetchBooks(): Promise<Book[]> {
   const response = await fetch(`${API_BASE_URL}/api/books`);
 
   if (!response.ok) {
     throw new Error("Failed to fetch books");
   }
+
   return response.json();
 }
-// this basically searches a book by title or author and returns the results
-// input -> request -> check -> return
+
+// Searches Open Library through your Express backend.
 export async function searchBooks(query: string): Promise<SearchBook[]> {
   const response = await fetch(
     `${API_BASE_URL}/api/books/search?q=${encodeURIComponent(query)}`,
   );
+
   if (!response.ok) {
     throw new Error("Failed to search books");
   }
+
   return response.json();
 }
+
 export async function fetchBookDetails(workId: string): Promise<BookDetails> {
   const response = await fetch(
     `${API_BASE_URL}/api/books/details/${encodeURIComponent(workId)}`,
   );
+
   if (!response.ok) {
     throw new Error("Failed to fetch book details");
   }
+
   return response.json();
 }
+
+// Adds a book to the currently signed-in user's library.
 export async function addBookToLibrary(book: BookDetails): Promise<void> {
+  // Step 1: identify the currently signed-in user.
   const {
     data: { user },
     error: userError,
@@ -64,6 +97,7 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
     throw new Error("You must be signed in to add a book.");
   }
 
+  // Step 2: see whether this book already exists in the shared books table.
   const { data: existingBook, error: findBookError } = await supabase
     .from("books")
     .select("id")
@@ -75,6 +109,7 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
   }
 
   let bookId = existingBook?.id;
+
   if (!bookId) {
     const { data: newBook, error: insertBookError } = await supabase
       .from("books")
@@ -96,15 +131,75 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
     }
 
     bookId = newBook.id;
-    const { error: userBookError } = await supabase.from("user_books").insert({
-      user_id: user.id,
-      book_id: bookId,
-      status: "want_to_read",
-      current_page: 0,
-    });
-
-    if (userBookError) {
-      throw new Error(userBookError.message);
-    }
   }
+
+  // Step 4: create the PERSONAL library row.
+  // This runs whether the shared book was new or already existed.
+  const { error: userBookError } = await supabase.from("user_books").insert({
+    user_id: user.id,
+    book_id: bookId,
+    status: "want_to_read",
+    current_page: 0,
+  });
+
+  if (userBookError) {
+    throw new Error(userBookError.message);
+  }
+}
+
+// Gets only the books saved by the CURRENT signed-in user.
+export async function fetchMyLibrary(): Promise<LibraryBook[]> {
+  // First, determine whose library we are loading.
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("You must be signed in to view your library.");
+  }
+
+  // Get this user's user_books rows and the matching shared book for each row.
+  const { data, error } = await supabase
+    .from("user_books")
+    .select(
+      `
+      id,
+      status,
+      current_page,
+      books (
+        id,
+        title,
+        author,
+        page_count,
+        cover_url,
+        open_library_id
+      )
+    `,
+    )
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? [])
+    .map((row) => {
+      // Depending on Supabase's relation inference, `books` can appear
+      // as one object or as an array containing one object.
+      const relatedBook = Array.isArray(row.books) ? row.books[0] : row.books;
+
+      // Do not send an incomplete library entry to the screen.
+      if (!relatedBook) {
+        return null;
+      }
+
+      return {
+        user_book_id: row.id,
+        status: row.status,
+        current_page: row.current_page,
+        book: relatedBook as LibraryBook["book"],
+      };
+    })
+    .filter((libraryBook): libraryBook is LibraryBook => libraryBook !== null);
 }

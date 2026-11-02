@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 
-import { fetchBooks, type Book } from "../../../api";
+import { fetchMyLibrary, type LibraryBook } from "../../../api";
 
 export default function LibraryTab() {
-  const [books, setBooks] = useState<Book[]>([]);
+  // This now holds user-specific library entries, not global Book rows.
+  const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadBooks() {
       try {
-        const data = await fetchBooks();
+        // Gets only the currently signed-in user's user_books rows.
+        const data = await fetchMyLibrary();
         setBooks(data);
       } catch (err) {
-        setError("Could not load books. Make sure the backend is running.");
+        setError("Could not load your library. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -26,36 +28,40 @@ export default function LibraryTab() {
   return (
     <View>
       {loading && (
-        <ActivityIndicator
-          size="large"
-          color="#A78BFA"
-          style={styles.loader}
-        />
+        <ActivityIndicator size="large" color="#A78BFA" style={styles.loader} />
       )}
 
       {error ? <Text style={styles.message}>{error}</Text> : null}
 
       {!loading && !error && books.length === 0 ? (
-        <Text style={styles.message}>No books have been added yet.</Text>
+        <Text style={styles.message}>
+          Your library is empty. Search for a book to add one.
+        </Text>
       ) : null}
 
       <View style={styles.grid}>
-        {books.map((book) => (
-          <View key={book.id} style={styles.gridItem}>
-            {book.cover_url ? (
-              <Image source={{ uri: book.cover_url }} style={styles.cover} />
-            ) : (
-              <View style={[styles.cover, styles.coverPlaceholder]}>
-                <Text style={styles.coverText}>
-                  {book.title.slice(0, 2).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <Text style={styles.bookTitle} numberOfLines={2}>
-              {book.title}
-            </Text>
-          </View>
-        ))}
+        {books.map((libraryBook) => {
+          // `libraryBook` holds user data; `book` holds shared book details.
+          const book = libraryBook.book;
+
+          return (
+            <View key={libraryBook.user_book_id} style={styles.gridItem}>
+              {book.cover_url ? (
+                <Image source={{ uri: book.cover_url }} style={styles.cover} />
+              ) : (
+                <View style={[styles.cover, styles.coverPlaceholder]}>
+                  <Text style={styles.coverText}>
+                    {book.title.slice(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.bookTitle} numberOfLines={2}>
+                {book.title}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -76,7 +82,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   gridItem: {
-    width: "31%", // 3 columns; change to 48% for 2
+    width: "31%",
     marginBottom: 16,
   },
   cover: {
