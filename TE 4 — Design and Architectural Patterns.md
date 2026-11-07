@@ -8,8 +8,6 @@ The mobile app is the presentation tier. Supabase (managed Postgres + Auth) is t
 - The companion needs Python's ML stack (embeddings, vector search) and must enforce spoiler safety on the server, where a client cannot bypass it.
 - Each tier can change on its own: we can redesign screens without touching the database, or swap the LLM provider without touching the app.
 
-&#91;embedded content: architecture · layered client-server, 2 external systems\]
-
 **Direction of communication:** the client always initiates. It calls Open Library for search, Supabase for auth and data, and the Companion API for questions (sending its Supabase JWT). The Companion API verifies the JWT, queries Supabase for the reader's position and allowed text chunks, then calls the LLM API. No component calls back up into the client.
 
 ## 2. High-Level Design Diagram
