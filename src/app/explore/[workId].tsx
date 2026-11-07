@@ -56,10 +56,15 @@ export default function BookDetailsScreen() {
       await addBookToLibrary(book);
       setLibraryMessage("Added to your library!");
     } catch (error) {
-      if (error instanceof Error) {
-        setLibraryMessage(error.message);
+      if (
+        error instanceof Error &&
+        error.message.includes("user_books_user_id_book_id_key")
+      ) {
+        setLibraryMessage("This book is already in your library.");
       } else {
-        setLibraryMessage("Could not add this book to your library.");
+        setLibraryMessage(
+          "Could not add this book to your library. Please try again.",
+        );
       }
     } finally {
       setAddingToLibrary(false);

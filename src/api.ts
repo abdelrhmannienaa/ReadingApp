@@ -86,9 +86,7 @@ export async function fetchBookDetails(workId: string): Promise<BookDetails> {
   return response.json();
 }
 
-// Adds a book to the currently signed-in user's library.
 export async function addBookToLibrary(book: BookDetails): Promise<void> {
-  // Step 1: identify the currently signed-in user.
   const {
     data: { user },
     error: userError,
@@ -98,7 +96,6 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
     throw new Error("You must be signed in to add a book.");
   }
 
-  // Step 2: see whether this book already exists in the shared books table.
   const { data: existingBook, error: findBookError } = await supabase
     .from("books")
     .select("id")
