@@ -4,10 +4,12 @@ export type Book = {
   id: string;
   title: string;
   author: string;
-  page_count: number;
+  page_count: number | null;
   cover_url: string | null;
   created_at: string;
 };
+
+// A lightweight book result returned by Open Library search.
 export type SearchBook = {
   open_library_id: string;
   title: string;
@@ -23,26 +25,68 @@ export type BookDetails = {
   description: string;
 };
 
+// Full details returned by the backend for one Open Library work.
+export type BookDetails = {
+  open_library_id: string;
+  title: string;
+  author: string;
+  cover_url: string | null;
+  description: string;
+};
+
+// A book in one particular user's library.
+// It includes user-specific fields like reading status and progress.
+export type LibraryBook = {
+  user_book_id: string;
+  status: string;
+  current_page: number;
+  book: {
+    id: string;
+    title: string;
+    author: string;
+    page_count: number | null;
+    cover_url: string | null;
+    open_library_id: string;
+  };
+};
+
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
+// Gets every shared book from the Express backend.
+// Do not use this for a person's personal Profile/Library screen.
 export async function fetchBooks(): Promise<Book[]> {
   const response = await fetch(`${API_BASE_URL}/api/books`);
 
   if (!response.ok) {
     throw new Error("Failed to fetch books");
   }
+
   return response.json();
 }
-// this basically searches a book by title or author and returns the results
-// input -> request -> check -> return
+
+// Searches Open Library through your Express backend.
 export async function searchBooks(query: string): Promise<SearchBook[]> {
   const response = await fetch(
     `${API_BASE_URL}/api/books/search?q=${encodeURIComponent(query)}`,
   );
+
   if (!response.ok) {
     throw new Error("Failed to search books");
   }
+
+  return response.json();
+}
+
+export async function fetchBookDetails(workId: string): Promise<BookDetails> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/books/details/${encodeURIComponent(workId)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch book details");
+  }
+
   return response.json();
 }
 export async function fetchBookDetails(workId: string): Promise<BookDetails> {
