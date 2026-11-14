@@ -89,15 +89,7 @@ export async function fetchBookDetails(workId: string): Promise<BookDetails> {
 
   return response.json();
 }
-export async function fetchBookDetails(workId: string): Promise<BookDetails> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/books/details/${encodeURIComponent(workId)}`,
-  );
-  if (!response.ok) {
-    throw new Error("Failed to fetch book details");
-  }
-  return response.json();
-}
+
 export async function addBookToLibrary(book: BookDetails): Promise<void> {
   const {
     data: { user },
