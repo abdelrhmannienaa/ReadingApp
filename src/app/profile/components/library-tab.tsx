@@ -1,10 +1,20 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { fetchMyLibrary, type LibraryBook } from "../../../api";
 
 export default function LibraryTab() {
-  // This now holds user-specific library entries, not global Book rows.
+  const router = useRouter();
+
+  // This holds user-specific library entries, not global Book rows.
   const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -12,10 +22,9 @@ export default function LibraryTab() {
   useEffect(() => {
     async function loadBooks() {
       try {
-        // Gets only the currently signed-in user's user_books rows.
         const data = await fetchMyLibrary();
         setBooks(data);
-      } catch (err) {
+      } catch {
         setError("Could not load your library. Please try again.");
       } finally {
         setLoading(false);
@@ -24,6 +33,16 @@ export default function LibraryTab() {
 
     loadBooks();
   }, []);
+
+  function openBookDetails(openLibraryId: string) {
+    // Turns "/works/OL123W" into "OL123W" for the dynamic route.
+    const workId = openLibraryId.replace("/works/", "");
+
+    router.push({
+      pathname: "/explore/[workId]",
+      params: { workId },
+    });
+  }
 
   return (
     <View>
@@ -41,11 +60,17 @@ export default function LibraryTab() {
 
       <View style={styles.grid}>
         {books.map((libraryBook) => {
-          // `libraryBook` holds user data; `book` holds shared book details.
           const book = libraryBook.book;
 
           return (
-            <View key={libraryBook.user_book_id} style={styles.gridItem}>
+            <Pressable
+              key={libraryBook.user_book_id}
+              style={({ pressed }) => [
+                styles.gridItem,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => openBookDetails(book.open_library_id)}
+            >
               {book.cover_url ? (
                 <Image source={{ uri: book.cover_url }} style={styles.cover} />
               ) : (
@@ -59,7 +84,7 @@ export default function LibraryTab() {
               <Text style={styles.bookTitle} numberOfLines={2}>
                 {book.title}
               </Text>
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -84,6 +109,9 @@ const styles = StyleSheet.create({
   gridItem: {
     width: "31%",
     marginBottom: 16,
+  },
+  pressed: {
+    opacity: 0.65,
   },
   cover: {
     width: "100%",
