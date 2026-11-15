@@ -395,7 +395,6 @@ export async function fetchDashboard(): Promise<DashboardData> {
     throw new Error(sessionsError.message);
   }
 
-<<<<<<< HEAD
   const { data: goals, error: goalsError } = await supabase
     .from("reading_goals")
     .select("starts_on, minutes")
@@ -407,8 +406,6 @@ export async function fetchDashboard(): Promise<DashboardData> {
   }
 
   // Sessions are newest first, so the first one seen for a book is its latest.
-=======
->>>>>>> 96bffe8d6dbe0dec488d158c80de940dd4883fc1
   const lastReadAt = new Map<string, string>();
 
   for (const session of sessions) {
