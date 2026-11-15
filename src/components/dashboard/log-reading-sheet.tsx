@@ -12,12 +12,11 @@ import {
 } from "react-native";
 
 import { logReadingSession, type CurrentRead } from "@/api";
+import { getReadingEntryError } from "@/lib/reading-validation";
 
 import { Palette } from "./palette";
 
 const QUICK_MINUTES = [5, 15, 30, 60];
-const MAX_MINUTES_PER_SESSION = 1440; // A day. Matches the database check.
-
 type LogReadingSheetProps = {
   book: CurrentRead;
   onClose: () => void;
@@ -37,23 +36,16 @@ export function LogReadingSheet({
 
   async function handleSave() {
     const minutes = Number(minutesText);
-    if (
-      !Number.isInteger(minutes) ||
-      minutes < 1 ||
-      minutes > MAX_MINUTES_PER_SESSION
-    ) {
-      setError("Enter how many minutes you read.");
-      return;
-    }
-
     // Page is optional: leaving it blank logs the time and keeps your place.
     const page = pageText.trim() === "" ? book.current_page : Number(pageText);
-    if (!Number.isInteger(page) || page < 0) {
-      setError("Enter the page number you reached.");
-      return;
-    }
-    if (book.page_count !== null && page > book.page_count) {
-      setError(`This book only has ${book.page_count} pages.`);
+    const validationError = getReadingEntryError({
+      minutes,
+      page,
+      currentPage: book.current_page,
+      pageCount: book.page_count,
+    });
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
