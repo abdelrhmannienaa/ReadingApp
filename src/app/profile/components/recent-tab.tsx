@@ -1,9 +1,19 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { fetchMyLibrary, type LibraryBook } from "../../../api";
 
 export default function RecentTab() {
+  const router = useRouter();
+
   const [books, setBooks] = useState<LibraryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -24,6 +34,16 @@ export default function RecentTab() {
     loadBooks();
   }, []);
 
+  function openBookDetails(openLibraryId: string) {
+    // Turns "/works/OL123W" into "OL123W" for the dynamic details route.
+    const workId = openLibraryId.replace("/works/", "");
+
+    router.push({
+      pathname: "/explore/[workId]",
+      params: { workId },
+    });
+  }
+
   return (
     <View>
       {loading && (
@@ -42,12 +62,23 @@ export default function RecentTab() {
         const book = libraryBook.book;
 
         return (
-          <View key={libraryBook.user_book_id} style={styles.bookCard}>
-            <View style={styles.coverPlaceholder}>
-              <Text style={styles.coverText}>
-                {book.title.slice(0, 2).toUpperCase()}
-              </Text>
-            </View>
+          <Pressable
+            key={libraryBook.user_book_id}
+            style={({ pressed }) => [
+              styles.bookCard,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => openBookDetails(book.open_library_id)}
+          >
+            {book.cover_url ? (
+              <Image source={{ uri: book.cover_url }} style={styles.cover} />
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <Text style={styles.coverText}>
+                  {book.title.slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.bookDetails}>
               <Text style={styles.bookTitle}>{book.title}</Text>
@@ -63,7 +94,7 @@ export default function RecentTab() {
                 Status: {libraryBook.status.replaceAll("_", " ")}
               </Text>
             </View>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -81,6 +112,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     flexDirection: "row",
     gap: 16,
+  },
+  pressed: {
+    opacity: 0.65,
+  },
+  cover: {
+    width: 64,
+    height: 92,
+    borderRadius: 8,
+    resizeMode: "cover",
   },
   coverPlaceholder: {
     width: 64,

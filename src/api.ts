@@ -2,7 +2,6 @@ import { daysAgoKey, type GoalChange, toDateKey } from "@/lib/reading-stats";
 import { supabase } from "@/lib/supabase";
 import { Platform } from "react-native";
 
-// A book saved in the shared books table.
 export type Book = {
   id: string;
   title: string;
@@ -12,7 +11,6 @@ export type Book = {
   created_at: string;
 };
 
-// A lightweight book result returned by Open Library search.
 export type SearchBook = {
   open_library_id: string;
   title: string;
@@ -21,17 +19,15 @@ export type SearchBook = {
   cover_url: string | null;
 };
 
-// Full details returned by the backend for one Open Library work.
 export type BookDetails = {
   open_library_id: string;
   title: string;
   author: string;
   cover_url: string | null;
+  page_count: number | null;
   description: string;
 };
 
-// A book in one particular user's library.
-// It includes user-specific fields like reading status and progress.
 export type LibraryBook = {
   user_book_id: string;
   status: string;
@@ -45,12 +41,10 @@ export type LibraryBook = {
     open_library_id: string;
   };
 };
-
+export type ReadingStatus = "want_to_read" | "reading" | "finished";
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
-// Gets every shared book from the Express backend.
-// Do not use this for a person's personal Profile/Library screen.
 export async function fetchBooks(): Promise<Book[]> {
   const response = await fetch(`${API_BASE_URL}/api/books`);
 
@@ -61,7 +55,6 @@ export async function fetchBooks(): Promise<Book[]> {
   return response.json();
 }
 
-// Searches Open Library through your Express backend.
 export async function searchBooks(query: string): Promise<SearchBook[]> {
   const response = await fetch(
     `${API_BASE_URL}/api/books/search?q=${encodeURIComponent(query)}`,
@@ -69,6 +62,20 @@ export async function searchBooks(query: string): Promise<SearchBook[]> {
 
   if (!response.ok) {
     throw new Error("Failed to search books");
+  }
+
+  return response.json();
+}
+export async function fetchDiscoverBooks(
+  subject: string,
+  offset: number,
+): Promise<SearchBook[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/books/discover?subject=${encodeURIComponent(subject)}&offset=${offset}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${subject} discovery books`);
   }
 
   return response.json();
@@ -116,6 +123,7 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
         title: book.title,
         author: book.author,
         cover_url: book.cover_url,
+        page_count: book.page_count,
       })
       .select("id")
       .single();
@@ -131,8 +139,6 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
     bookId = newBook.id;
   }
 
-  // Step 4: create the PERSONAL library row.
-  // This runs whether the shared book was new or already existed.
   const { error: userBookError } = await supabase.from("user_books").insert({
     user_id: user.id,
     book_id: bookId,
@@ -145,9 +151,63 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
   }
 }
 
-// Gets only the books saved by the CURRENT signed-in user.
+// Checks whether the currently signed-in user already saved this book.
+export type MyLibraryEntry = {
+  user_book_id: string;
+  status: ReadingStatus;
+};
+
+export async function fetchMyLibraryEntry(
+  openLibraryId: string,
+): Promise<MyLibraryEntry | null> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error("You must be signed in.");
+  }
+
+  // Find the shared book first.
+  const { data: book, error: bookError } = await supabase
+    .from("books")
+    .select("id")
+    .eq("open_library_id", openLibraryId)
+    .maybeSingle();
+
+  if (bookError) {
+    throw new Error(bookError.message);
+  }
+
+  // If no shared book exists, it cannot be in this user's library.
+  if (!book) {
+    return null;
+  }
+
+  // Find this user's personal row for that book.
+  const { data: userBook, error: userBookError } = await supabase
+    .from("user_books")
+    .select("id, status")
+    .eq("user_id", user.id)
+    .eq("book_id", book.id)
+    .maybeSingle();
+
+  if (userBookError) {
+    throw new Error(userBookError.message);
+  }
+
+  if (!userBook) {
+    return null;
+  }
+
+  return {
+    user_book_id: userBook.id,
+    status: userBook.status as ReadingStatus,
+  };
+}
+
 export async function fetchMyLibrary(): Promise<LibraryBook[]> {
-  // First, determine whose library we are loading.
   const {
     data: { user },
     error: userError,
@@ -157,7 +217,6 @@ export async function fetchMyLibrary(): Promise<LibraryBook[]> {
     throw new Error("You must be signed in to view your library.");
   }
 
-  // Get this user's user_books rows and the matching shared book for each row.
   const { data, error } = await supabase
     .from("user_books")
     .select(
@@ -183,11 +242,8 @@ export async function fetchMyLibrary(): Promise<LibraryBook[]> {
 
   return (data ?? [])
     .map((row) => {
-      // Depending on Supabase's relation inference, `books` can appear
-      // as one object or as an array containing one object.
       const relatedBook = Array.isArray(row.books) ? row.books[0] : row.books;
 
-      // Do not send an incomplete library entry to the screen.
       if (!relatedBook) {
         return null;
       }
@@ -201,9 +257,42 @@ export async function fetchMyLibrary(): Promise<LibraryBook[]> {
     })
     .filter((libraryBook): libraryBook is LibraryBook => libraryBook !== null);
 }
+export async function updateBookStatus(
+  userBookId: string,
+  status: ReadingStatus,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_books")
+    .update({ status })
+    .eq("id", userBookId)
+    .select("id");
 
-// The dashboard needs a year of sessions so a long streak is counted correctly,
-// even though the habit grid only shows the last 16 weeks.
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // RLS can block an update by returning zero changed rows.
+  if (!data?.length) {
+    throw new Error("Could not update this book's status.");
+  }
+}
+
+export async function removeBookFromLibrary(userBookId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_books")
+    .delete()
+    .eq("id", userBookId)
+    .select("id");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // RLS can block deletion by returning zero deleted rows.
+  if (!data?.length) {
+    throw new Error("Could not remove this book from your library.");
+  }
+}
 const SESSION_HISTORY_DAYS = 366;
 
 export type CurrentRead = {
@@ -211,7 +300,6 @@ export type CurrentRead = {
   title: string;
   author: string;
   cover_url: string | null;
-  // Null when we don't know the book's length, so check before showing "x/y".
   page_count: number | null;
   current_page: number;
   status: string;
@@ -252,6 +340,7 @@ async function getSignedInUser() {
   if (error || !user) {
     throw new Error("You must be signed in.");
   }
+
   return user;
 }
 
@@ -281,6 +370,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     throw new Error(sessionsError.message);
   }
 
+<<<<<<< HEAD
   const { data: goals, error: goalsError } = await supabase
     .from("reading_goals")
     .select("starts_on, minutes")
@@ -292,15 +382,16 @@ export async function fetchDashboard(): Promise<DashboardData> {
   }
 
   // Sessions are newest first, so the first one seen for a book is its latest.
+=======
+>>>>>>> 96bffe8d6dbe0dec488d158c80de940dd4883fc1
   const lastReadAt = new Map<string, string>();
+
   for (const session of sessions) {
     if (!lastReadAt.has(session.book_id)) {
       lastReadAt.set(session.book_id, session.created_at);
     }
   }
 
-  // supabase-js can't tell that each user_books row has exactly one book
-  // without generated database types, so we describe the row shape ourselves.
   const rows = (userBooks ?? []) as unknown as UserBookRow[];
 
   const books = rows.map((row) => ({
@@ -310,13 +401,14 @@ export async function fetchDashboard(): Promise<DashboardData> {
     ...row.books,
   }));
 
-  // Books being read come before unstarted ones, most recently read first.
   books.sort((a, b) => {
     if (a.status !== b.status) {
       return a.status === "reading" ? -1 : 1;
     }
+
     const aLast = lastReadAt.get(a.book_id) ?? "";
     const bLast = lastReadAt.get(b.book_id) ?? "";
+
     return bLast.localeCompare(aLast);
   });
 
@@ -339,8 +431,6 @@ export async function logReadingSession(input: {
 
   const isFinished = book.page_count !== null && page >= book.page_count;
 
-  // Update the book first. Saving the same page twice is harmless, so if the
-  // session insert below fails, trying again won't double count anything.
   const { data: updatedBooks, error: updateError } = await supabase
     .from("user_books")
     .update({
@@ -355,7 +445,6 @@ export async function logReadingSession(input: {
     throw new Error(updateError.message);
   }
 
-  // Row Level Security blocks an update by matching zero rows, not with an error.
   if (!updatedBooks?.length) {
     throw new Error("Could not update your progress on this book.");
   }
