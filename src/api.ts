@@ -41,7 +41,7 @@ export type LibraryBook = {
     open_library_id: string;
   };
 };
-
+export type ReadingStatus = "want_to_read" | "reading" | "finished";
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
@@ -152,9 +152,14 @@ export async function addBookToLibrary(book: BookDetails): Promise<void> {
 }
 
 // Checks whether the currently signed-in user already saved this book.
-export async function isBookInMyLibrary(
+export type MyLibraryEntry = {
+  user_book_id: string;
+  status: ReadingStatus;
+};
+
+export async function fetchMyLibraryEntry(
   openLibraryId: string,
-): Promise<boolean> {
+): Promise<MyLibraryEntry | null> {
   const {
     data: { user },
     error: userError,
@@ -164,7 +169,7 @@ export async function isBookInMyLibrary(
     throw new Error("You must be signed in.");
   }
 
-  // Find the shared books-table record.
+  // Find the shared book first.
   const { data: book, error: bookError } = await supabase
     .from("books")
     .select("id")
@@ -175,15 +180,15 @@ export async function isBookInMyLibrary(
     throw new Error(bookError.message);
   }
 
-  // No shared book record means no user could have added it yet.
+  // If no shared book exists, it cannot be in this user's library.
   if (!book) {
-    return false;
+    return null;
   }
 
-  // Look for this user's personal user_books row.
+  // Find this user's personal row for that book.
   const { data: userBook, error: userBookError } = await supabase
     .from("user_books")
-    .select("id")
+    .select("id, status")
     .eq("user_id", user.id)
     .eq("book_id", book.id)
     .maybeSingle();
@@ -192,7 +197,14 @@ export async function isBookInMyLibrary(
     throw new Error(userBookError.message);
   }
 
-  return userBook !== null;
+  if (!userBook) {
+    return null;
+  }
+
+  return {
+    user_book_id: userBook.id,
+    status: userBook.status as ReadingStatus,
+  };
 }
 
 export async function fetchMyLibrary(): Promise<LibraryBook[]> {
@@ -245,7 +257,42 @@ export async function fetchMyLibrary(): Promise<LibraryBook[]> {
     })
     .filter((libraryBook): libraryBook is LibraryBook => libraryBook !== null);
 }
+export async function updateBookStatus(
+  userBookId: string,
+  status: ReadingStatus,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_books")
+    .update({ status })
+    .eq("id", userBookId)
+    .select("id");
 
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // RLS can block an update by returning zero changed rows.
+  if (!data?.length) {
+    throw new Error("Could not update this book's status.");
+  }
+}
+
+export async function removeBookFromLibrary(userBookId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_books")
+    .delete()
+    .eq("id", userBookId)
+    .select("id");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // RLS can block deletion by returning zero deleted rows.
+  if (!data?.length) {
+    throw new Error("Could not remove this book from your library.");
+  }
+}
 const SESSION_HISTORY_DAYS = 366;
 
 export type CurrentRead = {
