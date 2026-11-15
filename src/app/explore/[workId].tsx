@@ -14,6 +14,7 @@ import {
   addBookToLibrary,
   type BookDetails,
   fetchBookDetails,
+  isBookInMyLibrary,
 } from "../../api";
 
 export default function BookDetailsScreen() {
@@ -24,16 +25,26 @@ export default function BookDetailsScreen() {
   const [error, setError] = useState("");
 
   const [addingToLibrary, setAddingToLibrary] = useState(false);
+  const [isInLibrary, setIsInLibrary] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState("");
 
   useEffect(() => {
     async function loadBookDetails() {
       setLoading(true);
       setError("");
+      setLibraryMessage("");
+      setIsInLibrary(false);
 
       try {
         const details = await fetchBookDetails(workId);
+
+        // Check whether the signed-in user already owns this specific book.
+        const alreadyInLibrary = await isBookInMyLibrary(
+          details.open_library_id,
+        );
+
         setBook(details);
+        setIsInLibrary(alreadyInLibrary);
       } catch {
         setError("Could not fetch book details.");
       } finally {
@@ -45,21 +56,24 @@ export default function BookDetailsScreen() {
   }, [workId]);
 
   async function handleAddToLibrary() {
-    if (!book) {
-      return;
-    }
+    if (!book || isInLibrary) return;
 
     setLibraryMessage("");
     setAddingToLibrary(true);
 
     try {
       await addBookToLibrary(book);
+
+      // Update the UI immediately after Supabase creates the library row.
+      setIsInLibrary(true);
       setLibraryMessage("Added to your library!");
     } catch (error) {
       if (
         error instanceof Error &&
         error.message.includes("user_books_user_id_book_id_key")
       ) {
+        // The book was already saved, so keep the button disabled.
+        setIsInLibrary(true);
         setLibraryMessage("This book is already in your library.");
       } else {
         setLibraryMessage(
@@ -92,24 +106,41 @@ export default function BookDetailsScreen() {
           <View style={styles.bookHeader}>
             {book.cover_url ? (
               <Image source={{ uri: book.cover_url }} style={styles.cover} />
-            ) : null}
+            ) : (
+              <View style={[styles.cover, styles.coverPlaceholder]}>
+                <Text style={styles.coverText}>
+                  {book.title.slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.bookMeta}>
               <Text style={styles.title}>{book.title}</Text>
               <Text style={styles.author}>by {book.author}</Text>
+
+              <Text style={styles.pageCount}>
+                {book.page_count !== null
+                  ? `${book.page_count} pages`
+                  : "Page count unavailable"}
+              </Text>
             </View>
           </View>
 
           <Pressable
             style={[
               styles.addButton,
-              addingToLibrary && styles.addButtonDisabled,
+              isInLibrary && styles.inLibraryButton,
+              (addingToLibrary || isInLibrary) && styles.addButtonDisabled,
             ]}
             onPress={handleAddToLibrary}
-            disabled={addingToLibrary}
+            disabled={addingToLibrary || isInLibrary}
           >
             <Text style={styles.addButtonText}>
-              {addingToLibrary ? "Adding..." : "Add to Library"}
+              {addingToLibrary
+                ? "Adding..."
+                : isInLibrary
+                  ? "In Your Library"
+                  : "Add to Library"}
             </Text>
           </Pressable>
 
@@ -142,6 +173,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     resizeMode: "contain",
   },
+  coverPlaceholder: {
+    backgroundColor: "#5B21B6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverText: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "700",
+  },
   bookMeta: {
     flex: 1,
     justifyContent: "center",
@@ -156,6 +197,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginTop: 10,
   },
+  pageCount: {
+    color: "#A1A1AA",
+    fontSize: 16,
+    marginTop: 8,
+  },
   addButton: {
     backgroundColor: "#A78BFA",
     paddingVertical: 14,
@@ -163,8 +209,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  inLibraryButton: {
+    backgroundColor: "#6D5A99",
+  },
   addButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.65,
   },
   addButtonText: {
     color: "#121212",
