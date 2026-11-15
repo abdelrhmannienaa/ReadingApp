@@ -1,4 +1,4 @@
-import { daysAgoKey, toDateKey } from "@/lib/reading-stats";
+import { daysAgoKey, type GoalChange, toDateKey } from "@/lib/reading-stats";
 import { supabase } from "@/lib/supabase";
 import { Platform } from "react-native";
 
@@ -316,6 +316,7 @@ export type DashboardData = {
   displayName: string;
   books: CurrentRead[];
   sessions: ReadingSession[];
+  goals: GoalChange[];
 };
 
 type UserBookRow = {
@@ -369,6 +370,20 @@ export async function fetchDashboard(): Promise<DashboardData> {
     throw new Error(sessionsError.message);
   }
 
+<<<<<<< HEAD
+  const { data: goals, error: goalsError } = await supabase
+    .from("reading_goals")
+    .select("starts_on, minutes")
+    .eq("user_id", user.id)
+    .order("starts_on", { ascending: true });
+
+  if (goalsError) {
+    throw new Error(goalsError.message);
+  }
+
+  // Sessions are newest first, so the first one seen for a book is its latest.
+=======
+>>>>>>> 96bffe8d6dbe0dec488d158c80de940dd4883fc1
   const lastReadAt = new Map<string, string>();
 
   for (const session of sessions) {
@@ -402,6 +417,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       user.user_metadata?.display_name ?? user.email?.split("@")[0] ?? "reader",
     books,
     sessions,
+    goals,
   };
 }
 
@@ -445,5 +461,21 @@ export async function logReadingSession(input: {
 
   if (insertError) {
     throw new Error(insertError.message);
+  }
+}
+
+// sets the goal from today onward. Past days keep the goal they had.
+export async function setDailyGoal(minutes: number): Promise<void> {
+  const user = await getSignedInUser();
+
+  const { error } = await supabase
+    .from("reading_goals")
+    .upsert(
+      { user_id: user.id, starts_on: toDateKey(new Date()), minutes },
+      { onConflict: "user_id,starts_on" },
+    );
+
+  if (error) {
+    throw new Error(error.message);
   }
 }
