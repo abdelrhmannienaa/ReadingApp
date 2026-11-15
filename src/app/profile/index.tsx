@@ -43,8 +43,13 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
-        <View style={styles.header}>
-          <Text style={styles.title}>*UserName*</Text>
+        <View style={styles.rowContainer}>
+          <View style={styles.header}>
+            <Text style={styles.title}>*UserName*</Text>
+          </View>
+          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </Pressable>
         </View>
         <View style={styles.centerContainer}>
           <Image
@@ -71,9 +76,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
-          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-            <Text style={styles.logoutButtonText}>Log Out</Text>
-          </Pressable>
+          
           {/* Tab buttons */}
           <View style={styles.rowContainer}>
             {TABS.map((tab) => (
@@ -231,6 +234,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     marginTop: 28,
+    maxHeight: 50
   },
 
   logoutButtonText: {

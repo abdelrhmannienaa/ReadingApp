@@ -1,19 +1,77 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-// Hardcoded placeholder data. Replace with real values from your API later.
-const STATS = [
-  { label: "Current Streak", value: "12 days" },
-  { label: "Longest Streak", value: "47 days" },
-  { label: "Books Read", value: "25" },
-  { label: "Books Reviewed", value: "8" },
-  { label: "Active Discussions", value: "4" },
-  { label: "Pages Read", value: "7,842" },
-];
+import { fetchUserStatistics, type UserStatistics } from "@/api";
 
 export default function StatisticsTab() {
+  const [statistics, setStatistics] = useState<UserStatistics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadStatistics() {
+      try {
+        const data = await fetchUserStatistics();
+        if (active) setStatistics(data);
+      } catch (error) {
+        if (active) {
+          const message =
+            error instanceof Error ? error.message : "An unexpected error occurred.";
+          setError(`Could not load your statistics: ${message}`);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadStatistics();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <ActivityIndicator
+        size="large"
+        color="#A78BFA"
+        accessibilityLabel="Loading statistics"
+        style={styles.loader}
+      />
+    );
+  }
+
+  if (error) {
+    return <Text style={styles.message}>{error}</Text>;
+  }
+
+  if (!statistics) {
+    return (
+      <Text style={styles.message}>
+        No statistics are available for your signed-in account.
+      </Text>
+    );
+  }
+
+  const stats = [
+    {
+      label: "Current Streak",
+      value: `${statistics.current_streak.toLocaleString()} ${statistics.current_streak === 1 ? "day" : "days"}`,
+    },
+    {
+      label: "Longest Streak",
+      value: `${statistics.highest_streak.toLocaleString()} ${statistics.highest_streak === 1 ? "day" : "days"}`,
+    },
+    { label: "Pages Read", value: statistics.pages_read.toLocaleString() },
+    { label: "Minutes Read", value: statistics.minutes_read.toLocaleString() },
+  ];
+
   return (
     <View style={styles.grid}>
-      {STATS.map((stat) => (
+      {stats.map((stat) => (
         <View key={stat.label} style={styles.statCard}>
           <Text style={styles.statValue}>{stat.value}</Text>
           <Text style={styles.statLabel}>{stat.label}</Text>
@@ -24,6 +82,14 @@ export default function StatisticsTab() {
 }
 
 const styles = StyleSheet.create({
+  loader: {
+    marginVertical: 32,
+  },
+  message: {
+    color: "#A78BFA",
+    textAlign: "center",
+    marginVertical: 16,
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",

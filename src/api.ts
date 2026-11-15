@@ -42,6 +42,14 @@ export type LibraryBook = {
   };
 };
 export type ReadingStatus = "want_to_read" | "reading" | "finished";
+export type UserStatistics = {
+  current_streak: number;
+  highest_streak: number;
+  pages_read: number;
+  minutes_read: number;
+  books_in_library: number;
+};
+
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
@@ -344,6 +352,23 @@ async function getSignedInUser() {
   return user;
 }
 
+// Returns null when the signed-in user has no statistics row yet.
+export async function fetchUserStatistics(): Promise<UserStatistics | null> {
+  const user = await getSignedInUser();
+
+  const { data, error } = await supabase
+    .from("user_statistics")
+    .select("current_streak, highest_streak, pages_read, minutes_read, books_in_library")
+    .eq("user_id", user.id)
+    .maybeSingle<UserStatistics>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
 export async function fetchDashboard(): Promise<DashboardData> {
   const user = await getSignedInUser();
 
@@ -370,7 +395,6 @@ export async function fetchDashboard(): Promise<DashboardData> {
     throw new Error(sessionsError.message);
   }
 
-<<<<<<< HEAD
   const { data: goals, error: goalsError } = await supabase
     .from("reading_goals")
     .select("starts_on, minutes")
@@ -382,8 +406,6 @@ export async function fetchDashboard(): Promise<DashboardData> {
   }
 
   // Sessions are newest first, so the first one seen for a book is its latest.
-=======
->>>>>>> 96bffe8d6dbe0dec488d158c80de940dd4883fc1
   const lastReadAt = new Map<string, string>();
 
   for (const session of sessions) {
