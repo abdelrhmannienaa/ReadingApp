@@ -1,3 +1,18 @@
+import { type CurrentRead, type DashboardData, fetchDashboard } from "@/api";
+import { GoalRing } from "@/components/dashboard/goal-ring";
+import { GoalSheet } from "@/components/dashboard/goal-sheet";
+import { HabitGrid } from "@/components/dashboard/habit-grid";
+import { LogReadingSheet } from "@/components/dashboard/log-reading-sheet";
+import { Palette } from "@/components/dashboard/palette";
+import { BottomTabInset } from "@/constants/theme";
+import {
+  buildHabitGrid,
+  getCurrentStreak,
+  getGoalMessage,
+  goalOn,
+  sumMinutesByDay,
+  toDateKey,
+} from "@/lib/reading-stats";
 import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState } from "react";
@@ -14,21 +29,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { type CurrentRead, type DashboardData, fetchDashboard } from "@/api";
-import { GoalRing } from "@/components/dashboard/goal-ring";
-import { HabitGrid } from "@/components/dashboard/habit-grid";
-import { LogReadingSheet } from "@/components/dashboard/log-reading-sheet";
-import { Palette } from "@/components/dashboard/palette";
-import { BottomTabInset } from "@/constants/theme";
-import {
-  buildHabitGrid,
-  DAILY_GOAL_MINUTES,
-  getCurrentStreak,
-  getGoalMessage,
-  sumMinutesByDay,
-  toDateKey,
-} from "@/lib/reading-stats";
-
 const SHELF_PREVIEW_COUNT = 3;
 
 export default function DashboardScreen() {
@@ -40,6 +40,7 @@ export default function DashboardScreen() {
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [logging, setLogging] = useState(false);
   const [showAllBooks, setShowAllBooks] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setError("");
@@ -63,7 +64,9 @@ export default function DashboardScreen() {
   const today = new Date();
   const minutesByDay = sumMinutesByDay(data?.sessions ?? []);
   const minutesToday = minutesByDay.get(toDateKey(today)) ?? 0;
-  const streak = getCurrentStreak(today, minutesByDay, DAILY_GOAL_MINUTES);
+  const goals = data?.goals ?? [];
+  const goalToday = goalOn(toDateKey(today), goals);
+  const streak = getCurrentStreak(today, minutesByDay, goals);
 
   const books = data?.books ?? [];
   const activeBook =
@@ -141,22 +144,44 @@ export default function DashboardScreen() {
             )}
 
             <SectionHeader title="Recent Activity" />
-            <View style={styles.goalRow}>
-              <GoalRing minutes={minutesToday} goal={DAILY_GOAL_MINUTES} />
-              <View style={styles.goalText}>
-                <Text style={styles.goalTitle}>Today&apos;s Goal</Text>
-                <Text style={styles.goalTitle}>
-                  {minutesToday} out of {DAILY_GOAL_MINUTES} minutes read today.
-                </Text>
+            {goalToday === null ? (
+              <View style={styles.goalPrompt}>
+                <Text style={styles.goalTitle}>Set a daily reading goal</Text>
                 <Text style={styles.mutedText}>
-                  {getGoalMessage(minutesToday, DAILY_GOAL_MINUTES, streak)}
+                  Choose how many minutes you want to read each day to start
+                  tracking your streak.
                 </Text>
+                <Pressable
+                  style={styles.logButton}
+                  onPress={() => setEditingGoal(true)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.logButtonText}>Set Goal</Text>
+                </Pressable>
               </View>
-            </View>
-
-            <HabitGrid
-              rows={buildHabitGrid(today, minutesByDay, DAILY_GOAL_MINUTES)}
-            />
+            ) : (
+              <>
+                <Pressable
+                  style={styles.goalRow}
+                  onPress={() => setEditingGoal(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change your daily reading goal"
+                >
+                  <GoalRing minutes={minutesToday} goal={goalToday} />
+                  <View style={styles.goalText}>
+                    <Text style={styles.goalTitle}>Today&apos;s Goal</Text>
+                    <Text style={styles.goalTitle}>
+                      {minutesToday} out of {goalToday} minutes read today.
+                    </Text>
+                    <Text style={styles.mutedText}>
+                      {getGoalMessage(minutesToday, goalToday, streak)}
+                    </Text>
+                    <Text style={styles.editHint}>Tap to change goal</Text>
+                  </View>
+                </Pressable>
+                <HabitGrid rows={buildHabitGrid(today, minutesByDay, goals)} />
+              </>
+            )}
 
             <SectionHeader title="Current Reads" />
             {books.length === 0 ? (
@@ -204,6 +229,17 @@ export default function DashboardScreen() {
           </View>
         )}
       </ScrollView>
+
+      {editingGoal ? (
+        <GoalSheet
+          currentGoal={goalToday}
+          onClose={() => setEditingGoal(false)}
+          onSaved={() => {
+            setEditingGoal(false);
+            loadDashboard();
+          }}
+        />
+      ) : null}
 
       {logging && activeBook ? (
         <LogReadingSheet
@@ -452,5 +488,17 @@ const styles = StyleSheet.create({
     color: Palette.muted,
     fontSize: 14,
     fontWeight: "600",
+  },
+  editHint: {
+    color: Palette.red,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  goalPrompt: {
+    backgroundColor: Palette.card,
+    borderRadius: 14,
+    padding: 16,
+    gap: 8,
   },
 });
