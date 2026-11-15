@@ -1,7 +1,19 @@
 // Pure helpers for the dashboard: no React and no database, just dates and sums.
 
-// There's no goal setting screen yet, so everyone shares this goal for now.
-export const DAILY_GOAL_MINUTES = 30;
+// Used for days before the user has set a goal of their own.
+export type GoalChange = { starts_on: string; minutes: number };
+
+// The goal in effect on a given day. `goals` must be sorted oldest first.
+export function goalOn(dayKey: string, goals: GoalChange[]): number | null {
+  if (goals.length === 0) return null;
+
+  let goal = goals[0].minutes;
+  for (const change of goals) {
+    if (change.starts_on > dayKey) break;
+    goal = change.minutes;
+  }
+  return goal;
+}
 
 // A day counts as "exceeded" at 1.5x the goal. If any minute over the goal
 // counted, "met" would only ever show on days of exactly 30 minutes.
@@ -61,7 +73,7 @@ export function getDayStatus(minutes: number, goal: number): DayStatus {
 export function buildHabitGrid(
   today: Date,
   minutesByDay: Map<string, number>,
-  goal: number,
+  goals: GoalChange[],
   weeks: number = GRID_WEEKS,
 ): GridDay[][] {
   const mondayIndex = (today.getDay() + 6) % 7; // getDay() starts on Sunday
@@ -72,10 +84,11 @@ export function buildHabitGrid(
     Array.from({ length: weeks }, (_, column) => {
       const key = toDateKey(addDays(firstMonday, column * 7 + row));
       const minutes = minutesByDay.get(key) ?? 0;
+      const goal = goalOn(key, goals);
       return {
         key,
         minutes,
-        status: getDayStatus(minutes, goal),
+        status: goal === null ? "unmet" : getDayStatus(minutes, goal),
         // These keys sort the same way as the dates they stand for.
         isFuture: key > todayKey,
       };
@@ -88,10 +101,13 @@ export function buildHabitGrid(
 export function getCurrentStreak(
   today: Date,
   minutesByDay: Map<string, number>,
-  goal: number,
+  goals: GoalChange[],
 ): number {
-  const metOn = (date: Date) =>
-    (minutesByDay.get(toDateKey(date)) ?? 0) >= goal;
+  const metOn = (date: Date) => {
+    const key = toDateKey(date);
+    const goal = goalOn(key, goals);
+    return goal !== null && (minutesByDay.get(key) ?? 0) >= goal;
+  };
 
   let streak = metOn(today) ? 1 : 0;
   let day = addDays(today, -1);
