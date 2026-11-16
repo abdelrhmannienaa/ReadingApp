@@ -43,6 +43,7 @@ export type LibraryBook = {
 };
 export type ReadingStatus = "want_to_read" | "reading" | "finished";
 export type UserStatistics = {
+  username: string | null;
   current_streak: number;
   highest_streak: number;
   pages_read: number;
@@ -358,7 +359,7 @@ export async function fetchUserStatistics(): Promise<UserStatistics | null> {
 
   const { data, error } = await supabase
     .from("user_statistics")
-    .select("current_streak, highest_streak, pages_read, minutes_read, books_in_library")
+    .select("username, current_streak, highest_streak, pages_read, minutes_read, books_in_library")
     .eq("user_id", user.id)
     .maybeSingle<UserStatistics>();
 
