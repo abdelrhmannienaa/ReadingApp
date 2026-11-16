@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -13,8 +13,9 @@ import LibraryTab from "./components/library-tab";
 import StatisticsTab from "./components/statistics-tab";
 //import DiscussionsTab from "../components/profile/discussions-tab";
 import { supabase } from "@/lib/supabase";
+import { fetchUserStatistics } from "@/api";
 import RecentTab from "./components/recent-tab";
-const TABS = ["Recent", "Library", "Statistics", "Discussions"] as const;
+const TABS = ["Recent", "Library", "Statistics"] as const;
 type Tab = (typeof TABS)[number];
 async function handleSignOut() {
   const { error } = await supabase.auth.signOut();
@@ -26,6 +27,30 @@ async function handleSignOut() {
 
 export default function ProfileScreen() {
   const [selectedTab, setSelectedTab] = useState<Tab>("Recent");
+  const [username, setUsername] = useState("Username");
+  const [booksInLibrary, setBooksInLibrary] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProfileStatistics() {
+      try {
+        const statistics = await fetchUserStatistics();
+        if (active) {
+          setUsername(statistics?.username || "Username");
+          setBooksInLibrary(statistics?.books_in_library ?? 0);
+        }
+      } catch (error) {
+        console.error("Could not load your profile statistics:", error);
+      }
+    }
+
+    void loadProfileStatistics();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const renderTabContent = () => {
     switch (selectedTab) {
@@ -43,9 +68,9 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
-        <View style={styles.rowContainer}>
+        <View style={styles.profileHeader}>
           <View style={styles.header}>
-            <Text style={styles.title}>*UserName*</Text>
+            <Text style={styles.title}>{username}</Text>
           </View>
           <Pressable style={styles.logoutButton} onPress={handleSignOut}>
             <Text style={styles.logoutButtonText}>Log Out</Text>
@@ -58,9 +83,9 @@ export default function ProfileScreen() {
           />
           <View style={styles.rowContainer}>
             <View>
-              <Text style={styles.subtitle}>Books In Progress</Text>
+              <Text style={styles.subtitle}>Books in Library</Text>
               <View style={styles.centerContainer}>
-                <Text style={styles.subtitle}>3</Text>
+                <Text style={styles.subtitle}>{booksInLibrary}</Text>
               </View>
             </View>
             <View>
@@ -69,12 +94,12 @@ export default function ProfileScreen() {
                 <Text style={styles.subtitle}>25</Text>
               </View>
             </View>
-            <View>
+            {/* <View>
               <Text style={styles.subtitle}>Books Reviewed</Text>
               <View style={styles.centerContainer}>
                 <Text style={styles.subtitle}>8</Text>
-              </View>
-            </View>
+              </View> 
+            </View> */}
           </View>
           
           {/* Tab buttons */}
@@ -116,7 +141,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#121212",
     paddingHorizontal: 24,
-    gap: 12,
+    gap: 40,
   },
   equalWidthRowContainer: {
     flex: 1,
@@ -127,7 +152,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 12,
   },
+  profileHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
   header: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 24,
     marginTop: 24,
     marginBottom: 40,
   },
@@ -228,6 +262,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   logoutButton: {
+    flexShrink: 0,
     backgroundColor: "#A78BFA",
     paddingVertical: 12,
     paddingHorizontal: 24,
