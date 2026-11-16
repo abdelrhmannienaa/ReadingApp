@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,11 @@ import {
   type ReadingStatus,
   removeBookFromLibrary,
   updateBookStatus,
-} from "../../api";
+} from "@/api";
+import { Palette } from "@/constants/palette";
+
+// Long descriptions are cut to this many lines until the user taps "Show more".
+const DESCRIPTION_PREVIEW_LINES = 6;
 
 const STATUS_OPTIONS: { label: string; value: ReadingStatus }[] = [
   { label: "Want to Read", value: "want_to_read" },
@@ -49,6 +54,7 @@ export default function BookDetailsScreen() {
   const [removingFromLibrary, setRemovingFromLibrary] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [libraryMessage, setLibraryMessage] = useState("");
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   const isInLibrary = libraryEntry !== null;
 
@@ -59,6 +65,7 @@ export default function BookDetailsScreen() {
       setLibraryMessage("");
       setLibraryEntry(null);
       setShowStatusMenu(false);
+      setShowFullDescription(false);
 
       try {
         const details = await fetchBookDetails(workId);
@@ -164,6 +171,14 @@ export default function BookDetailsScreen() {
   function confirmRemoveFromLibrary() {
     if (!book) return;
 
+    // Alert.alert does nothing on web, so use the browser's confirm box there.
+    if (Platform.OS === "web") {
+      if (globalThis.confirm(`Remove "${book.title}" from your library?`)) {
+        void handleRemoveFromLibrary();
+      }
+      return;
+    }
+
     Alert.alert(
       "Remove from library?",
       `Remove "${book.title}" from your library?`,
@@ -186,13 +201,20 @@ export default function BookDetailsScreen() {
         options={{
           headerShown: true,
           title: "Book Details",
-          headerStyle: { backgroundColor: "#121212" },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { color: "#FFFFFF" },
+          headerStyle: { backgroundColor: Palette.header },
+          headerTintColor: Palette.text,
+          headerTitleStyle: { color: Palette.text },
+          headerShadowVisible: false,
         }}
       />
 
-      {loading && <ActivityIndicator size="large" color="#A78BFA" />}
+      {loading && (
+        <ActivityIndicator
+          size="large"
+          color={Palette.red}
+          style={styles.loader}
+        />
+      )}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -200,7 +222,11 @@ export default function BookDetailsScreen() {
         <>
           <View style={styles.bookHeader}>
             {book.cover_url ? (
-              <Image source={{ uri: book.cover_url }} style={styles.cover} />
+              <Image
+                source={{ uri: book.cover_url }}
+                style={styles.cover}
+                accessibilityLabel={`Cover of ${book.title}`}
+              />
             ) : (
               <View style={[styles.cover, styles.coverPlaceholder]}>
                 <Text style={styles.coverText}>
@@ -211,7 +237,7 @@ export default function BookDetailsScreen() {
 
             <View style={styles.bookMeta}>
               <Text style={styles.title}>{book.title}</Text>
-              <Text style={styles.author}>by {book.author}</Text>
+              <Text style={styles.author}>By {book.author}</Text>
 
               <Text style={styles.pageCount}>
                 {book.page_count !== null
@@ -230,6 +256,7 @@ export default function BookDetailsScreen() {
               ]}
               onPress={handleAddToLibrary}
               disabled={addingToLibrary}
+              accessibilityRole="button"
             >
               <Text style={styles.addButtonText}>
                 {addingToLibrary ? "Adding..." : "Add to Library"}
@@ -245,6 +272,8 @@ export default function BookDetailsScreen() {
                 ]}
                 onPress={() => setShowStatusMenu(!showStatusMenu)}
                 disabled={updatingStatus || removingFromLibrary}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showStatusMenu }}
               >
                 <Text style={styles.statusButtonText}>
                   {updatingStatus
@@ -265,6 +294,10 @@ export default function BookDetailsScreen() {
                       ]}
                       onPress={() => handleStatusChange(option.value)}
                       disabled={updatingStatus || removingFromLibrary}
+                      accessibilityRole="button"
+                      accessibilityState={{
+                        selected: libraryEntry.status === option.value,
+                      }}
                     >
                       <Text style={styles.statusOptionText}>
                         {option.label}
@@ -281,6 +314,7 @@ export default function BookDetailsScreen() {
                 ]}
                 onPress={confirmRemoveFromLibrary}
                 disabled={removingFromLibrary || updatingStatus}
+                accessibilityRole="button"
               >
                 <Text style={styles.removeButtonText}>
                   {removingFromLibrary ? "Removing..." : "Remove from Library"}
@@ -293,8 +327,28 @@ export default function BookDetailsScreen() {
             <Text style={styles.libraryMessage}>{libraryMessage}</Text>
           ) : null}
 
-          <Text style={styles.header}>Description</Text>
-          <Text style={styles.description}>{book.description}</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Description</Text>
+          </View>
+          <Text
+            style={styles.description}
+            numberOfLines={
+              showFullDescription ? undefined : DESCRIPTION_PREVIEW_LINES
+            }
+          >
+            {book.description}
+          </Text>
+          {book.description.length > 300 ? (
+            <Pressable
+              onPress={() => setShowFullDescription(!showFullDescription)}
+              accessibilityRole="button"
+              style={styles.showMore}
+            >
+              <Text style={styles.showMoreText}>
+                {showFullDescription ? "Show less" : "Show more"}
+              </Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </ScrollView>
@@ -304,79 +358,83 @@ export default function BookDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 24,
-    backgroundColor: "#121212",
+    padding: 20,
+    backgroundColor: Palette.page,
+  },
+  loader: {
+    marginTop: 48,
   },
   bookHeader: {
     flexDirection: "row",
-    gap: 20,
+    gap: 18,
     marginBottom: 20,
   },
   cover: {
-    width: 130,
-    height: 195,
-    borderRadius: 8,
-    resizeMode: "contain",
+    width: 120,
+    height: 180,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Palette.divider,
+    backgroundColor: Palette.tile,
+    resizeMode: "cover",
   },
   coverPlaceholder: {
-    backgroundColor: "#5B21B6",
     alignItems: "center",
     justifyContent: "center",
   },
   coverText: {
-    color: "#FFFFFF",
+    color: Palette.text,
     fontSize: 28,
     fontWeight: "700",
   },
   bookMeta: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
   },
   title: {
-    color: "#FFFFFF",
-    fontSize: 35,
-    fontWeight: "bold",
+    color: Palette.text,
+    fontSize: 24,
+    fontWeight: "700",
   },
   author: {
-    color: "#A78BFA",
-    fontSize: 18,
-    marginTop: 10,
+    color: Palette.muted,
+    fontSize: 16,
   },
   pageCount: {
-    color: "#A1A1AA",
-    fontSize: 16,
-    marginTop: 8,
+    color: Palette.muted,
+    fontSize: 14,
   },
   addButton: {
-    backgroundColor: "#A78BFA",
+    backgroundColor: Palette.red,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 12,
   },
   addButtonText: {
-    color: "#121212",
+    color: Palette.text,
     fontSize: 16,
     fontWeight: "700",
   },
   statusButton: {
-    backgroundColor: "#5B21B6",
+    backgroundColor: Palette.red,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 8,
   },
   statusButtonText: {
-    color: "#FFFFFF",
+    color: Palette.text,
     fontSize: 16,
     fontWeight: "700",
   },
   statusMenu: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: Palette.card,
     borderRadius: 12,
-    padding: 8,
+    padding: 6,
     marginBottom: 10,
-    gap: 6,
+    gap: 4,
   },
   statusOption: {
     paddingVertical: 12,
@@ -384,22 +442,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   activeStatusOption: {
-    backgroundColor: "#5B21B6",
+    backgroundColor: Palette.tile,
   },
   statusOptionText: {
-    color: "#FFFFFF",
+    color: Palette.text,
     fontSize: 15,
     fontWeight: "600",
   },
   removeButton: {
-    backgroundColor: "#7F1D1D",
-    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Palette.red,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 12,
   },
   removeButtonText: {
-    color: "#FFFFFF",
+    color: Palette.red,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -407,26 +466,41 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   libraryMessage: {
-    color: "#A78BFA",
+    color: Palette.muted,
     fontSize: 14,
     textAlign: "center",
     marginBottom: 16,
   },
-  header: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "bold",
+  sectionHeader: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Palette.divider,
+    paddingBottom: 6,
     marginTop: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    color: Palette.text,
+    fontSize: 18,
+    fontWeight: "700",
   },
   description: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: 12,
+    color: Palette.text,
+    fontSize: 15,
+    lineHeight: 23,
+  },
+  showMore: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+  },
+  showMoreText: {
+    color: Palette.red,
+    fontSize: 14,
+    fontWeight: "600",
   },
   error: {
-    color: "#FCA5A5",
+    color: Palette.error,
     fontSize: 16,
     marginTop: 16,
+    textAlign: "center",
   },
 });

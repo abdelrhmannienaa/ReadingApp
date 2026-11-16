@@ -1,4 +1,5 @@
 import { type CurrentRead, type DashboardData, fetchDashboard } from "@/api";
+import { BrandHeader } from "@/components/brand-header";
 import { GoalRing } from "@/components/dashboard/goal-ring";
 import { GoalSheet } from "@/components/dashboard/goal-sheet";
 import { HabitGrid } from "@/components/dashboard/habit-grid";
@@ -27,12 +28,10 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SHELF_PREVIEW_COUNT = 3;
 
 export default function DashboardScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [data, setData] = useState<DashboardData | null>(null);
@@ -80,12 +79,11 @@ export default function DashboardScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: BottomTabInset + 32 }}
       >
-        <View style={[styles.header, { paddingTop: insets.top + 32 }]}>
-          <Text style={styles.brand}>Reademption</Text>
+        <BrandHeader>
           <Text style={styles.welcome}>
             Welcome back{data ? `, ${data.displayName}` : ""}.
           </Text>
-        </View>
+        </BrandHeader>
 
         {!data && !error && (
           <ActivityIndicator
@@ -316,18 +314,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: Palette.page,
-  },
-  header: {
-    backgroundColor: Palette.header,
-    alignItems: "center",
-    paddingBottom: 16,
-    paddingHorizontal: 24,
-  },
-  brand: {
-    color: Palette.red,
-    fontSize: 38,
-    fontWeight: "800",
-    letterSpacing: -1,
   },
   welcome: {
     color: Palette.text,

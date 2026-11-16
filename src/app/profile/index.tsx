@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useState } from "react";
 import {
   Alert,
   Image,
@@ -8,15 +10,19 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import LibraryTab from "./components/library-tab";
-import StatisticsTab from "./components/statistics-tab";
-//import DiscussionsTab from "../components/profile/discussions-tab";
+
+import { fetchMyLibrary, fetchUserStatistics } from "@/api";
+import { BrandHeader } from "@/components/brand-header";
+import LibraryTab from "@/components/profile/library-tab";
+import RecentTab from "@/components/profile/recent-tab";
+import StatisticsTab from "@/components/profile/statistics-tab";
+import { Palette } from "@/constants/palette";
+import { BottomTabInset } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
-import { fetchUserStatistics } from "@/api";
-import RecentTab from "./components/recent-tab";
+
 const TABS = ["Recent", "Library", "Statistics"] as const;
 type Tab = (typeof TABS)[number];
+
 async function handleSignOut() {
   const { error } = await supabase.auth.signOut();
 
@@ -27,32 +33,54 @@ async function handleSignOut() {
 
 export default function ProfileScreen() {
   const [selectedTab, setSelectedTab] = useState<Tab>("Recent");
-  const [username, setUsername] = useState("Username");
+  const [username, setUsername] = useState("");
   const [booksInLibrary, setBooksInLibrary] = useState(0);
+  const [booksRead, setBooksRead] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  // Changing this remounts the selected tab so it loads fresh data.
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    let active = true;
+  // Tabs stay mounted, so reload every time the Profile tab is opened. This
+  // picks up books added, finished or removed on other screens.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-    async function loadProfileStatistics() {
-      try {
-        const statistics = await fetchUserStatistics();
-        if (active) {
-          setUsername(statistics?.username || "Username");
-          setBooksInLibrary(statistics?.books_in_library ?? 0);
+      async function loadProfile() {
+        try {
+          const [statistics, library] = await Promise.all([
+            fetchUserStatistics(),
+            fetchMyLibrary(),
+          ]);
+          if (!active) return;
+
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+
+          setUsername(
+            statistics?.username || user?.email?.split("@")[0] || "Reader",
+          );
+          setBooksInLibrary(library.length);
+          setBooksRead(
+            library.filter((entry) => entry.status === "finished").length,
+          );
+          setCurrentStreak(statistics?.current_streak ?? 0);
+        } catch (error) {
+          console.error("Could not load your profile:", error);
         }
-      } catch (error) {
-        console.error("Could not load your profile statistics:", error);
       }
-    }
 
-    void loadProfileStatistics();
+      void loadProfile();
+      setRefreshKey((key) => key + 1);
 
-    return () => {
-      active = false;
-    };
-  }, []);
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
-  const renderTabContent = () => {
+  function renderTabContent() {
     switch (selectedTab) {
       case "Recent":
         return <RecentTab />;
@@ -60,221 +88,167 @@ export default function ProfileScreen() {
         return <LibraryTab />;
       case "Statistics":
         return <StatisticsTab />;
-      // case "Discussions":
-      //   return <DiscussionsTab />;
     }
-  };
+  }
+
+  const stats = [
+    { label: "In Library", value: booksInLibrary },
+    { label: "Books Read", value: booksRead },
+    { label: "Day Streak", value: currentStreak },
+  ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-        <View style={styles.profileHeader}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{username}</Text>
-          </View>
-          <Pressable style={styles.logoutButton} onPress={handleSignOut}>
-            <Text style={styles.logoutButtonText}>Log Out</Text>
-          </Pressable>
-        </View>
-        <View style={styles.centerContainer}>
-          <Image
-            source={require("../../../assets/images/icon.png")}
-            style={styles.circularImage}
-          />
-          <View style={styles.rowContainer}>
-            <View>
-              <Text style={styles.subtitle}>Books in Library</Text>
-              <View style={styles.centerContainer}>
-                <Text style={styles.subtitle}>{booksInLibrary}</Text>
-              </View>
-            </View>
-            <View>
-              <Text style={styles.subtitle}>Books Read</Text>
-              <View style={styles.centerContainer}>
-                <Text style={styles.subtitle}>25</Text>
-              </View>
-            </View>
-            {/* <View>
-              <Text style={styles.subtitle}>Books Reviewed</Text>
-              <View style={styles.centerContainer}>
-                <Text style={styles.subtitle}>8</Text>
-              </View> 
-            </View> */}
-          </View>
-          
-          {/* Tab buttons */}
-          <View style={styles.rowContainer}>
-            {TABS.map((tab) => (
-              <Pressable
-                key={tab}
-                onPress={() => setSelectedTab(tab)}
-                style={[styles.tab, selectedTab === tab && styles.tabActive]}
-              >
-                <Text style={styles.subtitle}>{tab}</Text>
-              </Pressable>
-            ))}
+    <View style={styles.screen}>
+      <StatusBar style="light" />
+
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: BottomTabInset + 32 }}
+      >
+        <BrandHeader title={username || " "}>
+          <View style={styles.identity}>
+            <Image
+              source={require("../../../assets/images/icon.png")}
+              style={styles.avatar}
+            />
           </View>
 
-          {/* Content that changes based on the selected tab */}
-          <View style={styles.tabContent}>{renderTabContent()}</View>
+          <View style={styles.statsRow}>
+            {stats.map((stat) => (
+              <View key={stat.label} style={styles.stat}>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </BrandHeader>
+
+        <View style={styles.content}>
+          <View style={styles.tabBar} accessibilityRole="tablist">
+            {TABS.map((tab) => {
+              const selected = selectedTab === tab;
+              return (
+                <Pressable
+                  key={tab}
+                  onPress={() => setSelectedTab(tab)}
+                  style={[styles.tab, selected && styles.tabActive]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={[styles.tabText, selected && styles.tabTextActive]}
+                  >
+                    {tab}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View key={refreshKey} style={styles.tabContent}>
+            {renderTabContent()}
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.logoutButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={handleSignOut}
+            accessibilityRole="button"
+          >
+            <Text style={styles.logoutText}>Log Out</Text>
+          </Pressable>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: "#121212",
-    paddingHorizontal: 15, //was 24
+    backgroundColor: Palette.page,
   },
-  centerContainer: {
-    flex: 1,
-    backgroundColor: "#121212",
-    paddingHorizontal: 15,
+  identity: {
     alignItems: "center",
-    gap: 20,
+    gap: 8,
+    marginTop: 12,
   },
-  rowContainer: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: "#121212",
-    paddingHorizontal: 24,
-    gap: 40,
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 2,
+    borderColor: Palette.divider,
   },
-  equalWidthRowContainer: {
-    flex: 1,
-    width: "100%",
-    alignItems: "stretch",
-    flexDirection: "row",
-    backgroundColor: "#121212",
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  profileHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  header: {
-    flex: 1,
-    minWidth: 0,
-    marginLeft: 24,
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  eyebrow: {
-    color: "#A78BFA",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    marginBottom: 10,
-  },
-  title: {
-    color: "#FFFFFF",
-    fontSize: 36,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: "#A1A1AA",
-    fontSize: 16,
-  },
-  sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 14,
-  },
-  loader: {
-    marginTop: 32,
-  },
-  bookCard: {
-    backgroundColor: "#1E1E1E",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    flexDirection: "row",
-    gap: 16,
-  },
-  coverPlaceholder: {
-    width: 64,
-    height: 92,
-    borderRadius: 8,
-    backgroundColor: "#5B21B6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverText: {
-    color: "#FFFFFF",
+  username: {
+    color: Palette.text,
     fontSize: 20,
     fontWeight: "700",
   },
-  bookDetails: {
+  statsRow: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    marginTop: 16,
+  },
+  stat: {
     flex: 1,
-    justifyContent: "center",
+    alignItems: "center",
   },
-  bookTitle: {
-    color: "#FFFFFF",
-    fontSize: 19,
-    fontWeight: "600",
-    marginBottom: 4,
+  statValue: {
+    color: Palette.text,
+    fontSize: 20,
+    fontWeight: "700",
   },
-  author: {
-    color: "#A1A1AA",
-    fontSize: 14,
-    marginBottom: 14,
-  },
-  pageCount: {
-    color: "#D4D4D8",
+  statLabel: {
+    color: Palette.muted,
     fontSize: 13,
+    marginTop: 2,
   },
-  emptyText: {
-    color: "#A1A1AA",
-    fontSize: 15,
+  content: {
+    paddingHorizontal: 20,
   },
-  errorText: {
-    color: "#FCA5A5",
-    fontSize: 15,
-  },
-  localImage: {
-    width: 100,
-    height: 100,
-  },
-  circularImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 60,
-    overflow: "hidden",
+  tabBar: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Palette.divider,
+    marginTop: 12,
   },
   tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#000",
+    borderBottomColor: Palette.red,
+  },
+  tabText: {
+    color: Palette.muted,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  tabTextActive: {
+    color: Palette.text,
   },
   tabContent: {
-    padding: 16,
-    alignSelf: "stretch",
+    paddingTop: 16,
   },
   logoutButton: {
-    flexShrink: 0,
-    backgroundColor: "#A78BFA",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
     alignItems: "center",
-    marginTop: 28,
-    maxHeight: 50
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Palette.red,
+    marginTop: 24,
   },
-
-  logoutButtonText: {
-    color: "#121212",
+  logoutText: {
+    color: Palette.red,
     fontSize: 16,
     fontWeight: "700",
+  },
+  pressed: {
+    opacity: 0.65,
   },
 });

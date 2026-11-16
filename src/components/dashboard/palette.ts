@@ -1,19 +1,8 @@
 import type { DayStatus } from "@/lib/reading-stats";
 
-// Colors taken from the Figma home page.
-export const Palette = {
-  page: "#222020",
-  header: "#151515",
-  card: "#2E2C2C",
-  divider: "#474545",
-  red: "#CF2D2D",
-  ringTrack: "#442323",
-  barTrack: "#443C3C",
-  tile: "#494646",
-  text: "#FFFFFF",
-  muted: "#9F9F9F",
-  error: "#FCA5A5",
-} as const;
+// The shared colors now live in constants/palette.ts so every screen can use
+// them. They're re-exported here so the dashboard imports keep working.
+export { Palette } from "@/constants/palette";
 
 export const StatusColors: Record<DayStatus, string> = {
   unmet: "#3D3C3C",

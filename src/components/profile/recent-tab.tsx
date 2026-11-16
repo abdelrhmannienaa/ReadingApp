@@ -9,7 +9,14 @@ import {
   View,
 } from "react-native";
 
-import { fetchMyLibrary, type LibraryBook } from "../../../api";
+import { fetchMyLibrary, type LibraryBook } from "@/api";
+import { Palette } from "@/constants/palette";
+
+const STATUS_LABELS: Record<string, string> = {
+  want_to_read: "Want to Read",
+  reading: "Currently Reading",
+  finished: "Completed",
+};
 
 export default function RecentTab() {
   const router = useRouter();
@@ -47,7 +54,11 @@ export default function RecentTab() {
   return (
     <View>
       {loading && (
-        <ActivityIndicator size="large" color="#A78BFA" style={styles.loader} />
+        <ActivityIndicator
+          size="large"
+          color={Palette.red}
+          style={styles.loader}
+        />
       )}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -69,9 +80,14 @@ export default function RecentTab() {
               pressed && styles.pressed,
             ]}
             onPress={() => openBookDetails(book.open_library_id)}
+            accessibilityRole="button"
           >
             {book.cover_url ? (
-              <Image source={{ uri: book.cover_url }} style={styles.cover} />
+              <Image
+                source={{ uri: book.cover_url }}
+                style={styles.cover}
+                accessibilityLabel={`Cover of ${book.title}`}
+              />
             ) : (
               <View style={styles.coverPlaceholder}>
                 <Text style={styles.coverText}>
@@ -81,8 +97,12 @@ export default function RecentTab() {
             )}
 
             <View style={styles.bookDetails}>
-              <Text style={styles.bookTitle}>{book.title}</Text>
-              <Text style={styles.author}>{book.author}</Text>
+              <Text style={styles.bookTitle} numberOfLines={2}>
+                {book.title}
+              </Text>
+              <Text style={styles.author} numberOfLines={1}>
+                {book.author}
+              </Text>
 
               <Text style={styles.pageCount}>
                 {book.page_count !== null
@@ -90,8 +110,8 @@ export default function RecentTab() {
                   : "Page count unavailable"}
               </Text>
 
-              <Text style={styles.pageCount}>
-                Status: {libraryBook.status.replaceAll("_", " ")}
+              <Text style={styles.status}>
+                {STATUS_LABELS[libraryBook.status] ?? libraryBook.status}
               </Text>
             </View>
           </Pressable>
@@ -106,63 +126,70 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   bookCard: {
-    backgroundColor: "#1E1E1E",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    backgroundColor: Palette.card,
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
     flexDirection: "row",
-    gap: 16,
+    gap: 14,
   },
   pressed: {
     opacity: 0.65,
   },
   cover: {
     width: 64,
-    height: 92,
+    height: 96,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Palette.divider,
     resizeMode: "cover",
   },
   coverPlaceholder: {
     width: 64,
-    height: 92,
+    height: 96,
     borderRadius: 8,
-    backgroundColor: "#5B21B6",
+    backgroundColor: Palette.tile,
     alignItems: "center",
     justifyContent: "center",
   },
   coverText: {
-    color: "#FFFFFF",
+    color: Palette.text,
     fontSize: 20,
     fontWeight: "700",
   },
   bookDetails: {
     flex: 1,
     justifyContent: "center",
+    gap: 4,
   },
   bookTitle: {
-    color: "#FFFFFF",
-    fontSize: 19,
-    fontWeight: "600",
-    marginBottom: 4,
+    color: Palette.text,
+    fontSize: 16,
+    fontWeight: "700",
   },
   author: {
-    color: "#A1A1AA",
+    color: Palette.muted,
     fontSize: 14,
-    marginBottom: 14,
   },
   pageCount: {
-    color: "#D4D4D8",
+    color: Palette.muted,
     fontSize: 13,
-    marginBottom: 3,
+  },
+  status: {
+    color: Palette.red,
+    fontSize: 13,
+    fontWeight: "600",
   },
   emptyText: {
-    color: "#A1A1AA",
+    color: Palette.muted,
     fontSize: 15,
     textAlign: "center",
+    marginVertical: 16,
   },
   errorText: {
-    color: "#FCA5A5",
+    color: Palette.error,
     fontSize: 15,
     textAlign: "center",
+    marginVertical: 16,
   },
 });

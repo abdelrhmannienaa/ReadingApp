@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { fetchUserStatistics, type UserStatistics } from "@/api";
+import { Palette } from "@/constants/palette";
 
 export default function StatisticsTab() {
   const [statistics, setStatistics] = useState<UserStatistics | null>(null);
@@ -18,7 +19,9 @@ export default function StatisticsTab() {
       } catch (error) {
         if (active) {
           const message =
-            error instanceof Error ? error.message : "An unexpected error occurred.";
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred.";
           setError(`Could not load your statistics: ${message}`);
         }
       } finally {
@@ -37,7 +40,7 @@ export default function StatisticsTab() {
     return (
       <ActivityIndicator
         size="large"
-        color="#A78BFA"
+        color={Palette.red}
         accessibilityLabel="Loading statistics"
         style={styles.loader}
       />
@@ -45,7 +48,7 @@ export default function StatisticsTab() {
   }
 
   if (error) {
-    return <Text style={styles.message}>{error}</Text>;
+    return <Text style={styles.error}>{error}</Text>;
   }
 
   if (!statistics) {
@@ -86,7 +89,14 @@ const styles = StyleSheet.create({
     marginVertical: 32,
   },
   message: {
-    color: "#A78BFA",
+    color: Palette.muted,
+    fontSize: 15,
+    textAlign: "center",
+    marginVertical: 16,
+  },
+  error: {
+    color: Palette.error,
+    fontSize: 15,
     textAlign: "center",
     marginVertical: 16,
   },
@@ -97,7 +107,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: "48%",
-    backgroundColor: "#1E1E1E",
+    backgroundColor: Palette.card,
     borderRadius: 14,
     paddingVertical: 20,
     paddingHorizontal: 12,
@@ -105,12 +115,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statValue: {
-    color: "#A78BFA",
+    color: Palette.red,
     fontSize: 26,
     fontWeight: "700",
   },
   statLabel: {
-    color: "#FFFFFF",
+    color: Palette.muted,
     fontSize: 14,
     marginTop: 6,
     textAlign: "center",
